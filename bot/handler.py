@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from menu_order.menu_items import MENU
 from menu_order.option_item import SIZE_OPTIONS, SUGAR_OPTIONS, ICE_OPTIONS
 
-load_dotenv()
+
 
 load_dotenv()
 
@@ -458,7 +458,7 @@ async def process_order(update, context, method: str):
         ),
     )
 
-    # Notify admin and group about new order
+    # Build detailed notification for admin and group
     notify_text = (
         f"🔔 កម្មង់ថ្មី #{order_id}\n"
         f"👤 អ្នកកម្មង់: {query.from_user.full_name}\n"
@@ -471,25 +471,25 @@ async def process_order(update, context, method: str):
             f"{i}. {item.get('emoji','')} {item.get('item_name','')}\n"
             f"   📏 ទំហំ: {SIZE_OPTIONS.get(item['size'], {}).get('label', item['size'])}\n"
         )
-    # Show sugar & ice only for non-food
-    if item.get("category") != "food":
+        # Show sugar & ice only for non-food items
+        if item.get("category") != "food":
+            notify_text += (
+                f"   🍬 ស្ករ: {SUGAR_OPTIONS.get(item['sugar'], {}).get('label', item['sugar'])}\n"
+                f"   🧊 ទឹកកក: {ICE_OPTIONS.get(item['ice'], {}).get('label', item['ice'])}\n"
+            )
         notify_text += (
-            f"   🍬 ស្ករ: {SUGAR_OPTIONS.get(item['sugar'], {}).get('label', item['sugar'])}\n"
-            f"   🧊 ទឹកកក: {ICE_OPTIONS.get(item['ice'], {}).get('label', item['ice'])}\n"
+            f"   🔢 ចំនួន: {item['quantity']}\n"
+            f"   💰 ${item['total_price']:.2f}\n\n"
         )
-    notify_text += (
-        f"   🔢 ចំនួន: {item['quantity']}\n" f"   💰 ${item['total_price']:.2f}\n\n"
-    )
 
     notify_text += f"💰 សរុបសរុប: ${total_all:.2f}\n"
 
-    # Send to admin and/or group
-    for dest in [ADMIN_USERNAME, GROUP_CHAT_ID]:
-        if dest:
-            try:
-                await context.bot.send_message(chat_id=dest, text=notify_text)
-            except Exception as e:
-                logging.error(f"Failed to notify {dest}: {e}")
+    # Send to group chat
+    if GROUP_CHAT_ID:
+        try:
+            await context.bot.send_message(chat_id=GROUP_CHAT_ID, text=notify_text)
+        except Exception as e:
+            logging.error(f"Failed to notify group {GROUP_CHAT_ID}: {e}")
 
     # Clear the user cart after confirmation
     user_carts[uid] = []
