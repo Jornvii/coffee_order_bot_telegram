@@ -10,15 +10,18 @@ from menu_order.menu_items import MENU
 from menu_order.option_item import SIZE_OPTIONS, SUGAR_OPTIONS, ICE_OPTIONS
 
 
-
 load_dotenv()
 
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
-BOT_TOKEN = os.getenv("BOT_TOKEN")          
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 BOT_USERNAME = os.getenv("BOT_USERNAME")
 GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID")
 # ADMIN_CHAT_ID = ( int(ADMIN_CHAT_ID) if ADMIN_CHAT_ID and ADMIN_CHAT_ID.isdigit() else None )
-GROUP_CHAT_ID = int(GROUP_CHAT_ID) if GROUP_CHAT_ID and GROUP_CHAT_ID.lstrip("-").isdigit() else None
+GROUP_CHAT_ID = (
+    int(GROUP_CHAT_ID)
+    if GROUP_CHAT_ID and GROUP_CHAT_ID.lstrip("-").isdigit()
+    else None
+)
 
 # In-memory storage
 user_carts = {}  # user_id -> list
@@ -352,12 +355,40 @@ async def confirm_add(update, context):
     total = (t["base_price"] + size_price) * t["quantity"]
     cart.append({**t, "total_price": total})
 
+    # Build a success message showing what was added
+    success_text = (
+        f"✅ បានបញ្ចូលទៅកន្ត្រក!\n\n"
+        f"{t['emoji']} {t['item_name']}\n"
+        f"📏 ទំហំ: {SIZE_OPTIONS.get(t['size'], {}).get('label', t['size'])}\n"
+    )
+    
+    # Only show sugar/ice for non-food items
+    if t["category"] != "food":
+        success_text += (
+            f"🍬 ស្ករ: {SUGAR_OPTIONS.get(t['sugar'], {}).get('label', t['sugar'])}\n"
+            f"🧊 ទឹកកក: {ICE_OPTIONS.get(t['ice'], {}).get('label', t['ice'])}\n"
+        )
+    
+    success_text += (
+        f"🔢 ចំនួន: {t['quantity']}\n"
+        f"💰 តម្លៃ: ${total:.2f}"
+    )
+
+    # Create keyboard with View Cart and Continue Shopping buttons
+    kb = [
+        [InlineKeyboardButton("🛒 មើលកន្ត្រក", callback_data="view_cart")],
+        [InlineKeyboardButton("➕ បន្តកម្មង់", callback_data=f"category_{t['category']}")],
+        [InlineKeyboardButton("🏠 ត្រលប់ទៅម៉ឺនុយ", callback_data="back_to_menu")],
+    ]
+
     # clear temp order for that user
     temp_orders[uid] = {}
-    # go back to the category listing where item was selected
-    await show_category(update, context, t["category"])
-
-
+    
+    # Show success message with cart option
+    await query.edit_message_text(
+        success_text,
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 async def view_cart(update, context):
     query = update.callback_query
     if query is None:
@@ -447,7 +478,7 @@ async def process_order(update, context, method: str):
             f"   💰 តម្លៃសរុប: ${item['total_price']:.2f}\n\n"
         )
 
-    order_detail_text += f"💰 សរុបសរុប: ${total_all:.2f}\n"
+    order_detail_text += f"💰 សរុប: ${total_all:.2f}\n"
     order_detail_text += "🙏 សូមអរគុណសម្រាប់ការកម្មង់របស់អ្នក!"
 
     # Send order confirmation to user (instead of just a simple message)
@@ -478,11 +509,10 @@ async def process_order(update, context, method: str):
                 f"   🧊 ទឹកកក: {ICE_OPTIONS.get(item['ice'], {}).get('label', item['ice'])}\n"
             )
         notify_text += (
-            f"   🔢 ចំនួន: {item['quantity']}\n"
-            f"   💰 ${item['total_price']:.2f}\n\n"
+            f"   🔢 ចំនួន: {item['quantity']}\n" f"   💰 ${item['total_price']:.2f}\n\n"
         )
 
-    notify_text += f"💰 សរុបសរុប: ${total_all:.2f}\n"
+    notify_text += f"💰សរុប: ${total_all:.2f}\n"
 
     # Send to group chat
     if GROUP_CHAT_ID:
